@@ -22,4 +22,14 @@ public class EstacaoService {
     public double calcularPrecipitacaoAcumulada(List<Medicao> medicoes) {
         return medicoes.stream().mapToDouble(Medicao::getPrecipitacaoMm).sum();
     }
+
+    /** Média de umidade do período (ignora dias sem leitura de umidade). Retorna 0 se não houver dado. */
+    public double calcularUmidadeMedia(List<Medicao> medicoes) {
+        return medicoes.stream()
+                .map(Medicao::getUmidade)
+                .filter(java.util.Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(0);
+    }
 }

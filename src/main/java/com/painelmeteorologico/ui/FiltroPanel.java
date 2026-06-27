@@ -3,19 +3,23 @@ package com.painelmeteorologico.ui;
 import com.painelmeteorologico.model.Estacao;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
-import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * Painel esquerdo: filtros de data (slider), estação, região, variável,
- * limiar de alerta, modo de visualização e janela de tendência —
- * exatamente os filtros listados no enunciado.
+ * Painel esquerdo: filtros da UI. O slider de data NÃO está mais aqui —
+ * foi movido para sob o mapa (DateSliderPanel), igual ao mockup do enunciado.
+ *
+ * A "Estação" agora tem um campo de busca (digite para filtrar), porque o banco
+ * tem ~300 estações e um JComboBox simples ficaria difícil de navegar.
  */
 public class FiltroPanel extends JPanel {
 
-    private final JSlider sliderData = new JSlider();
-    private final JLabel labelDataSelecionada = new JLabel();
+    private final JTextField campoBuscaEstacao = new JTextField();
     private final JComboBox<String> comboEstacao = new JComboBox<>();
     private final JComboBox<String> comboQualidade = new JComboBox<>(new String[]{"Todas", "Pass", "Fail", "No Data"});
     private final JComboBox<String> comboVariavel = new JComboBox<>(new String[]{"Temperatura", "Precipitação", "Umidade"});
@@ -23,8 +27,7 @@ public class FiltroPanel extends JPanel {
     private final JComboBox<Integer> comboJanelaTendencia = new JComboBox<>(new Integer[]{7, 15, 30});
     private final JSpinner spinnerLimiarMm = new JSpinner(new SpinnerNumberModel(50, 0, 500, 5));
 
-    private LocalDate dataInicio = LocalDate.of(2025, 1, 1);
-    private LocalDate dataFim = LocalDate.of(2026, 5, 31);
+    private final List<String> todasEstacoes = new ArrayList<>();
 
     public FiltroPanel() {
         super();
@@ -32,56 +35,63 @@ public class FiltroPanel extends JPanel {
         setBorder(BorderFactory.createTitledBorder("Filtros"));
         setPreferredSize(new Dimension(260, 0));
 
-        adicionarComLabel("Estação", comboEstacao);
+        adicionarBuscaEstacao();
         adicionarComLabel("Qualidade do dado (qc_status_label)", comboQualidade);
         adicionarComLabel("Variável climática", comboVariavel);
         adicionarComLabel("Modo de visualização", comboModoVisualizacao);
         adicionarComLabel("Janela de tendência (dias)", comboJanelaTendencia);
         adicionarComLabel("Limiar de alerta (mm)", spinnerLimiarMm);
 
-        configurarSliderData();
-
         add(Box.createVerticalGlue());
     }
 
-    private void configurarSliderData() {
-        JPanel painelData = new JPanel(new BorderLayout());
-        painelData.setBorder(BorderFactory.createTitledBorder("Período (jSlider)"));
+    private void adicionarBuscaEstacao() {
+        JPanel painel = new JPanel(new BorderLayout(0, 4));
+        painel.setBorder(BorderFactory.createTitledBorder("Estação / Cidade"));
+        campoBuscaEstacao.setToolTipText("Digite para filtrar (ex.: nome da cidade)");
 
-        long totalDias = java.time.temporal.ChronoUnit.DAYS.between(dataInicio, dataFim);
-        sliderData.setMinimum(0);
-        sliderData.setMaximum((int) totalDias);
-        sliderData.setValue((int) totalDias); // começa na data mais recente
-        sliderData.addChangeListener(e -> atualizarLabelData());
+        comboEstacao.setMaximumRowCount(15);
 
-        atualizarLabelData();
+        campoBuscaEstacao.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent e) { filtrar(); }
+            public void removeUpdate(DocumentEvent e) { filtrar(); }
+            public void changedUpdate(DocumentEvent e) { filtrar(); }
+        });
 
-        painelData.add(sliderData, BorderLayout.CENTER);
-        painelData.add(labelDataSelecionada, BorderLayout.SOUTH);
-        add(painelData);
+        painel.add(campoBuscaEstacao, BorderLayout.NORTH);
+        painel.add(comboEstacao, BorderLayout.CENTER);
+        painel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
+        add(painel);
+        add(Box.createVerticalStrut(8));
     }
 
-    private void atualizarLabelData() {
-        LocalDate selecionada = getDataSelecionada();
-        labelDataSelecionada.setText("Data: " + selecionada);
-    }
+    /** Refiltra o combo conforme o texto digitado, preservando a seleção atual se ainda existir. */
+    private void filtrar() {
+        String termo = campoBuscaEstacao.getText().trim().toLowerCase(Locale.ROOT);
+        String selecionadoAntes = (String) comboEstacao.getSelectedItem();
 
-    public LocalDate getDataSelecionada() {
-        return dataInicio.plusDays(sliderData.getValue());
-    }
+        comboEstacao.removeAllItems();
+        comboEstacao.addItem("Todas");
+        for (String nome : todasEstacoes) {
+            if (termo.isEmpty() || nome.toLowerCase(Locale.ROOT).contains(termo)) {
+                comboEstacao.addItem(nome);
+            }
+        }
 
-    public void definirPeriodo(LocalDate inicio, LocalDate fim) {
-        this.dataInicio = inicio;
-        this.dataFim = fim;
-        long totalDias = java.time.temporal.ChronoUnit.DAYS.between(inicio, fim);
-        sliderData.setMaximum((int) Math.max(totalDias, 1));
-        sliderData.setValue(0);
+        if (selecionadoAntes != null) {
+            for (int i = 0; i < comboEstacao.getItemCount(); i++) {
+                if (comboEstacao.getItemAt(i).equals(selecionadoAntes)) {
+                    comboEstacao.setSelectedItem(selecionadoAntes);
+                    break;
+                }
+            }
+        }
     }
 
     public void preencherEstacoes(List<Estacao> estacoes) {
-        comboEstacao.removeAllItems();
-        comboEstacao.addItem("Todas");
-        for (Estacao e : estacoes) comboEstacao.addItem(e.getNome());
+        todasEstacoes.clear();
+        for (Estacao e : estacoes) todasEstacoes.add(e.getNome());
+        filtrar();
     }
 
     private void adicionarComLabel(String texto, JComponent componente) {
@@ -93,7 +103,6 @@ public class FiltroPanel extends JPanel {
         add(Box.createVerticalStrut(8));
     }
 
-    public JSlider getSliderData() { return sliderData; }
     public JComboBox<String> getComboEstacao() { return comboEstacao; }
     public JComboBox<String> getComboQualidade() { return comboQualidade; }
     public JComboBox<String> getComboVariavel() { return comboVariavel; }
